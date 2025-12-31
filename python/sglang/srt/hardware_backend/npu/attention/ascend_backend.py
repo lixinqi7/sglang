@@ -233,6 +233,8 @@ class AscendAttnBackend(AttentionBackend):
         )
         if self.use_mla:
             self.ringmla_mask = self.ascend_attn_mask_builder.ringmla_mask
+        self.dllm_algorithm = model_runner.server_args.dllm_algorithm
+        self.is_dllm_model = self.dllm_algorithm is not None
 
     def get_verify_buffers_to_fill_after_draft(self):
         """
@@ -647,7 +649,7 @@ class AscendAttnBackend(AttentionBackend):
                 )
 
             else:
-                if layer.qk_head_dim <= 128:
+                if layer.qk_head_dim <= 128 and not self.is_dllm_model:
                     query = q.reshape(-1, layer.tp_q_head_num * layer.qk_head_dim)
                     attn_output = torch.empty(
                         (query.shape[0], layer.tp_q_head_num * layer.v_head_dim),
@@ -688,20 +690,43 @@ class AscendAttnBackend(AttentionBackend):
                     ):
                         causal = False
 
-                    self.native_attn._run_sdpa_forward_extend(
-                        q_,
-                        o_,
-                        k_cache.view(-1, layer.tp_k_head_num, layer.qk_head_dim),
-                        v_cache.view(-1, layer.tp_v_head_num, layer.v_head_dim),
-                        forward_batch.req_to_token_pool.req_to_token,
-                        forward_batch.req_pool_indices,
-                        forward_batch.seq_lens,
-                        forward_batch.extend_prefix_lens,
-                        forward_batch.extend_seq_lens,
-                        scaling=layer.scaling,
-                        enable_gqa=use_gqa,
-                        causal=causal,
-                    )
+                    is_prefill = states.get("is_prefill", False)
+                    states = getattr(forward_batch, "model_specific_states", {}) or {}
+                    if self.is_dllm_model and not (self.dllm_algorithm == "ShiftConfidence" and is_prefill):
+                        causal = False
+                    if self.dllm_algorithm == "ShiftConfidence":
+                        pad_len = states.get("pad_len", 0)
+                        attention_mask = states.get("attention_mask", None)
+                        self.native_attn._run_sdpa_forward_extend_mask(
+                            q_,
+                            o_,
+                            k_cache.view(-1, layer.tp_k_head_num, layer.qk_head_dim),
+                            v_cache.view(-1, layer.tp_v_head_num, layer.v_head_dim),
+                            forward_batch.req_to_token_pool.req_to_token,
+                            forward_batch.req_pool_indices,
+                            forward_batch.seq_lens,
+                            forward_batch.extend_prefix_lens,
+                            forward_batch.extend_seq_lens,
+                            attention_mask,
+                            scaling=layer.scaling,
+                            enable_gqa=use_gqa,
+                            causal=causal,
+                        )
+                    else:
+                        self.native_attn._run_sdpa_forward_extend(
+                            q_,
+                            o_,
+                            k_cache.view(-1, layer.tp_k_head_num, layer.qk_head_dim),
+                            v_cache.view(-1, layer.tp_v_head_num, layer.v_head_dim),
+                            forward_batch.req_to_token_pool.req_to_token,
+                            forward_batch.req_pool_indices,
+                            forward_batch.seq_lens,
+                            forward_batch.extend_prefix_lens,
+                            forward_batch.extend_seq_lens,
+                            scaling=layer.scaling,
+                            enable_gqa=use_gqa,
+                            causal=causal,
+                        )
         elif sum(forward_batch.extend_prefix_lens_cpu) > 0:
             num_token_padding = q.shape[0]
             q, k, v = [

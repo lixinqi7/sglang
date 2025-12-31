@@ -280,6 +280,8 @@ class RotaryEmbedding(MultiPlatformOp):
         else:
             rotary_mode = "interleave"
         mrope_section = [0, 0, 0]
+        if positions.dtype != torch.int64:
+            positions = positions.to(torch.int64)
         query_out, key_out = torch_npu.npu_mrope(
             positions,
             query,
