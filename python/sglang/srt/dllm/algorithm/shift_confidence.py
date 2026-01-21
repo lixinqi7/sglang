@@ -21,7 +21,7 @@ class ShiftConfidence(DllmAlgorithm):
         self.threshold = config.algorithm_config.get("threshold", 0.95)
         self.num_small_blocks = config.algorithm_config.get("num_small_blocks", 1)
         self.alg = config.algorithm_config.get("alg", "confidence_threshold")
-        self.eos_token_id = config.algorithm_config.get("alg", "eos_token_id")
+        self.eos_token_id = config.algorithm_config.get("eos_token_id")
         self.next_token_cache = None
 
     def run(
