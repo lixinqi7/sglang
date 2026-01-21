@@ -247,7 +247,7 @@ class LLaDA2MoeSparseMoeBlock(nn.Module):
             # num_fused_shared_experts=self.num_fused_shared_experts,
             topk_group=self.topk_group,
             correction_bias=self.correction_bias,
-            routed_scaling_factor=self.routed_scaling_factor,
+            # routed_scaling_factor=self.routed_scaling_factor,
         )
 
         self.experts = get_moe_impl_class(quant_config)(
@@ -257,7 +257,7 @@ class LLaDA2MoeSparseMoeBlock(nn.Module):
             hidden_size=config.hidden_size,
             intermediate_size=config.moe_intermediate_size,
             quant_config=quant_config,
-            routed_scaling_factor=self.routed_scaling_factor,
+            # routed_scaling_factor=self.routed_scaling_factor,
             prefix=add_prefix("experts", prefix),
         )
         # shared expert
@@ -363,7 +363,12 @@ class LLaDA2MoeSparseMoeBlock(nn.Module):
             final_hidden_states = self._forward_router_experts(hidden_states)
 
         if self.num_shared_experts > 0:
-            final_hidden_states = final_hidden_states + shared_output
+            x = shared_output
+            x.add_(final_hidden_states, alpha=self.routed_scaling_factor)
+            final_hidden_states = x
+            # final_hidden_states = final_hidden_states + shared_output
+        else:
+            final_hidden_states.mul_(self.routed_scaling_factor)
 
         if self.tp_size > 1 and not use_reduce_scatter:
             final_hidden_states = tensor_model_parallel_all_reduce(final_hidden_states)
@@ -396,7 +401,13 @@ class LLaDA2MoeSparseMoeBlock(nn.Module):
         )
 
         if shared_output is not None:
-            final_hidden_states += shared_output
+            x = shared_output
+            x.add_(final_hidden_states, alpha=self.routed_scaling_factor)
+            final_hidden_states = x
+            # final_hidden_states = final_hidden_states + shared_output
+        else:
+            final_hidden_states.mul_(self.routed_scaling_factor)
+
         return final_hidden_states
 
 
