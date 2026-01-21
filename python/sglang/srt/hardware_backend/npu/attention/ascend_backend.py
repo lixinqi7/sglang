@@ -317,7 +317,7 @@ class AscendAttnBackend(AttentionBackend):
 
     def init_cuda_graph_state(self, max_bs: int, max_num_tokens: int):
         self.graph_metadata = {
-            "block_tables": torch.empty(
+            "block_tables": torch.zeros(
                 (max_bs, (self.max_context_len + self.page_size - 1) // self.page_size),
                 dtype=torch.int32,
                 device=self.device,
@@ -733,43 +733,20 @@ class AscendAttnBackend(AttentionBackend):
                     ):
                         causal = False
 
-                    is_prefill = states.get("is_prefill", False)
-                    states = getattr(forward_batch, "model_specific_states", {}) or {}
-                    if self.is_dllm_model and not (self.dllm_algorithm == "ShiftConfidence" and is_prefill):
-                        causal = False
-                    if self.dllm_algorithm == "ShiftConfidence":
-                        pad_len = states.get("pad_len", 0)
-                        attention_mask = states.get("attention_mask", None)
-                        self.native_attn._run_sdpa_forward_extend_mask(
-                            q_,
-                            o_,
-                            k_cache.view(-1, layer.tp_k_head_num, layer.qk_head_dim),
-                            v_cache.view(-1, layer.tp_v_head_num, layer.v_head_dim),
-                            forward_batch.req_to_token_pool.req_to_token,
-                            forward_batch.req_pool_indices,
-                            forward_batch.seq_lens,
-                            forward_batch.extend_prefix_lens,
-                            forward_batch.extend_seq_lens,
-                            attention_mask,
-                            scaling=layer.scaling,
-                            enable_gqa=use_gqa,
-                            causal=causal,
-                        )
-                    else:
-                        self.native_attn._run_sdpa_forward_extend(
-                            q_,
-                            o_,
-                            k_cache.view(-1, layer.tp_k_head_num, layer.qk_head_dim),
-                            v_cache.view(-1, layer.tp_v_head_num, layer.v_head_dim),
-                            forward_batch.req_to_token_pool.req_to_token,
-                            forward_batch.req_pool_indices,
-                            forward_batch.seq_lens,
-                            forward_batch.extend_prefix_lens,
-                            forward_batch.extend_seq_lens,
-                            scaling=layer.scaling,
-                            enable_gqa=use_gqa,
-                            causal=causal,
-                        )
+                    self.native_attn._run_sdpa_forward_extend(
+                        q_,
+                        o_,
+                        k_cache.view(-1, layer.tp_k_head_num, layer.qk_head_dim),
+                        v_cache.view(-1, layer.tp_v_head_num, layer.v_head_dim),
+                        forward_batch.req_to_token_pool.req_to_token,
+                        forward_batch.req_pool_indices,
+                        forward_batch.seq_lens,
+                        forward_batch.extend_prefix_lens,
+                        forward_batch.extend_seq_lens,
+                        scaling=layer.scaling,
+                        enable_gqa=use_gqa,
+                        causal=causal,
+                    )
         elif sum(forward_batch.extend_prefix_lens_cpu) > 0:
             num_token_padding = q.shape[0]
             q, k, v = [

@@ -456,7 +456,7 @@ class ForwardBatch:
             ret.num_token_non_padded = torch.tensor(
                 len(batch.input_ids), dtype=torch.int32
             ).to(device, non_blocking=True)
-            if hasattr(batch.dllm_config, "use_context_causal_block_diffusion") and batch.dllm_config.use_context_causal_block_diffusion:
+            if hasattr(batch.dllm_config, "use_lpadding") and batch.dllm_config.use_lpadding:
                 start_idx = 0
                 for prompt_padding, block_offset in zip(batch.dllm_prompt_paddings, batch.dllm_block_offsets):
                     if block_offset==0:

@@ -834,7 +834,7 @@ class Req:
 
     def _init_fill_ids_for_dllm(self):
         if not self.dllm_ids:
-            if hasattr(self.dllm_config,"use_context_causal_block_diffusion") and self.dllm_config.use_context_causal_block_diffusion:
+            if hasattr(self.dllm_config,"use_lpadding") and self.dllm_config.use_lpadding:
                 prompt_pad_len = ((len(self.origin_input_ids) + self.dllm_config.block_size - 1) // 
                                 self.dllm_config.block_size) * self.dllm_config.block_size - len(self.origin_input_ids)
                 if hasattr(self.dllm_config, "pad_id"):
@@ -852,7 +852,7 @@ class Req:
                     self.dllm_prompt_padding = prompt_pad_len
                 else:
                     raise AttributeError(
-                    "DllmConfig object has no attribute pad_id for use_context_causal_block_diffusion")
+                    "DllmConfig object has no attribute pad_id for use_lpadding")
             else:
                 self.dllm_ids = (
                     self.origin_input_ids
