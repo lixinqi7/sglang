@@ -2510,7 +2510,13 @@ class ServerArgs:
                     "Cuda graph bs is set to [1] because of using diffusion LLM inference"
                 )
                 self.cuda_graph_bs = [1]
-            if self.attention_backend != "flashinfer":
+            if self.device == "npu":
+                if self.attention_backend != "ascend":
+                    logger.warning(
+                        "Attention backend is set to ascend with npu because of enabling cuda graph in diffusion LLM inference"
+                    )
+                    self.attention_backend = "ascend"
+            elif self.attention_backend != "flashinfer":
                 logger.warning(
                     "Attention backend is set to flashinfer because of enabling cuda graph in diffusion LLM inference"
                 )
