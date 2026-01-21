@@ -71,7 +71,7 @@ class ShiftConfidence(DllmAlgorithm):
                         -1,
                     )
                     x = torch.where(mask_index, x, forward_batch.input_ids[small_block_start:small_block_end])
-                    confidence = torch.where(mask_index, confidence, -np.inf)
+                    confidence = torch.where(mask_index, p, -np.inf)
 
                     if self.alg=="confidence_threshold":
                         transfer_index = confidence > self.threshold
